@@ -1,0 +1,16 @@
+DB:
+  dbname: nativeSources
+  collection:
+    name : sourceABN
+    docfield: record
+
+HOST:
+  authDB: admin
+  password: null
+  port: 29017
+  server: localhost
+  user: null
+
+Solr:
+  host: http://sb-udb5.swissbib.unibas.ch:8080/solr/sb-biblio/select
+

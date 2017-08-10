@@ -1,0 +1,16 @@
+MONGO:
+  DB:
+    dbname: solr
+    querycollection: queries
+    responsecollection: responses
+
+  HOST:
+    authDB: admin
+    password: null
+    port: 29017
+    server: localhost
+    user: null
+
+SOLR:
+  host: http://localhost:8080/solr/sb-biblio/select
+

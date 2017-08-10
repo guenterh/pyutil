@@ -1,0 +1,4 @@
+ParentPath: /swissbib_index/solrDocumentProcessing/FrequentInitialPreProcessing/data/format
+SolrURL: http://sb-us15.swissbib.unibas.ch:8080/solr/sb-biblio/select?q=id:$id&wt=json&rows=0
+idregex: .*tag="001">(.*?)<.*
+outFile: /home/swissbib/environment/code/swissbib.repositories/pyutils/idsNotAvailable.txt
