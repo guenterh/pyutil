@@ -15,7 +15,9 @@ class RunQueries():
                  mongoUser = None,
                  mongoPassword = None,
                  time = None,
-                 config = None):
+                 config = None,
+                 addparams = "",
+                 addnote = ""):
 
 
         cTimeUTC =  datetime.utcnow()
@@ -26,6 +28,8 @@ class RunQueries():
         self.mongoWrapper = MongoClientWrapper(self.config,
                                                mongoUser,
                                                mongoPassword)
+        self.addnote = addnote
+
         self.solrURL = self.config.getConfig()["SOLR"]["host"]
 
         self.minimumLiveTime = time
@@ -35,6 +39,7 @@ class RunQueries():
         self.timestampFile.write("testtime_" + self.currentTime + os.linesep)
         self.timestampFile.flush()
         self.timestampFile.close()
+        self.additionalparams = addparams
 
 
 
@@ -49,6 +54,8 @@ class RunQueries():
         for doc in self.mongoWrapper.getQueriesCollection().find(filter):
             try:
                 query = doc["query"]
+                if not self.additionalparams == "":
+                    query += "&" + self.additionalparams
                 docId = doc["_id"]
                 result = requests.get(self.solrURL,params=query.encode("utf-8"))
                 io = StringIO(result.text)
@@ -67,12 +74,17 @@ class RunQueries():
                         "testtime_" + self.currentTime: (int) (queryTime),
                         "testhits_" + self.currentTime: (int) (numberHits)
                     }
+                    if not self.addnote == "":
+                        responseObject["note_" + self.currentTime] = self.addnote
                     self.mongoWrapper.insertReponseObject(responseObject)
                 else:
                     updatePart = {
                         "testtime_" + self.currentTime: (int)(queryTime),
                         "testhits_" + self.currentTime: (int) (numberHits)
                     }
+                    if not self.addnote == "":
+                        updatePart["note_" + self.currentTime] = self.addnote
+
                     #responseObject["testtime_" + self.currentTime] = (int) (queryTime)
                     #responseObject["testhits_" + self.currentTime] = (int)(numberHits)
                     response = self.mongoWrapper.updateResponsObject(docId,updatePart)
@@ -95,6 +107,9 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--password', help='password for Mongo DB', type=str, default=None)
     parser.add_argument('-m', '--minimalTime', help='time used to process live query should be $gt then minimaltime', type=str, default=None)
     parser.add_argument('-c', '--config', help='config file', type=str, default="config/files/solrperformance/performance.yaml")
+    parser.add_argument('-a', '--addparam', help='query parameters which should be added to the productive query stored in mongo', type=str, default="")
+    parser.add_argument('-n', '--note', help='additional note which should be written into the response to identify the character of the testcase', type=str, default="")
+
 
     parser.parse_args()
     args = parser.parse_args()
@@ -102,7 +117,9 @@ if __name__ == '__main__':
     runner = RunQueries(args.user,
                         args.password,
                         args.minimalTime,
-                        args.config)
+                        args.config,
+                        args.addparam,
+                        args.note)
     runner.startRunning()
 
 
