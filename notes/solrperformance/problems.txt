@@ -8,3 +8,6 @@ http://sb-us15.swissbib.unibas.ch:8080/solr/sb-biblio/select?filter(*:*)&facet.f
 
 
 fq
+
+db.responses.find({$and: [{"testtime_2017-09-03T51817Z": {$gt: 800}}]})
+db.responses.find({"testtime_2017-09-04T101944Z":{$exists:true}})
