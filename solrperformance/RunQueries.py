@@ -17,7 +17,8 @@ class RunQueries():
                  time = None,
                  config = None,
                  addparams = "",
-                 addnote = ""):
+                 addnote = "",
+                 solrHost = None):
 
 
         cTimeUTC =  datetime.utcnow()
@@ -30,11 +31,13 @@ class RunQueries():
                                                mongoPassword)
         self.addnote = addnote
 
-        self.solrURL = self.config.getConfig()["SOLR"]["host"]
-
+        if solrHost is None:
+            self.solrURL = self.config.getConfig()["SOLR"]["host"]
+        else:
+            self.solrURL = solrHost
         self.minimumLiveTime = time
 
-        self.timestampFile = open("timestamps.txt","a")
+        self.timestampFile = open("solrperformance/timestamps.txt","a")
 
         self.timestampFile.write("testtime_" + self.currentTime + os.linesep)
         self.timestampFile.flush()
@@ -45,6 +48,7 @@ class RunQueries():
 
     def startRunning(self):
 
+        startTime = time.strftime('%H:%M:%S')
 
         if self.minimumLiveTime is None:
             filter = {}
@@ -97,6 +101,12 @@ class RunQueries():
             except Exception as ex:
                 print (ex)
 
+        endtime = time.strftime('%H:%M:%S')
+        durationFile = open("solrperformance/duration.txt","a")
+
+        durationFile.write("duration of test: " + startTime + " / " + endtime + os.linesep)
+        durationFile.flush()
+        durationFile.close()
 
 
 
@@ -109,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', help='config file', type=str, default="config/files/solrperformance/performance.yaml")
     parser.add_argument('-a', '--addparam', help='query parameters which should be added to the productive query stored in mongo', type=str, default="")
     parser.add_argument('-n', '--note', help='additional note which should be written into the response to identify the character of the testcase', type=str, default="")
+    parser.add_argument('-s', '--solrhost', help='Solr Host URL', type=str, default=None)
 
 
     parser.parse_args()
@@ -119,7 +130,9 @@ if __name__ == '__main__':
                         args.minimalTime,
                         args.config,
                         args.addparam,
-                        args.note)
+                        args.note,
+                        args.solrhost)
+
     runner.startRunning()
 
 

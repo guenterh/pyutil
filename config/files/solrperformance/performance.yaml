@@ -12,5 +12,5 @@ MONGO:
     user: null
 
 SOLR:
-  host: http://sb-us15.swissbib.unibas.ch:8080/solr/sb-biblio/select
+  host: http://sb-us15.swissbib.unibas.ch:8080/solr/green/select
 
