@@ -18,19 +18,23 @@ class SolrDocWellFormedChecker:
         self.parentPath = config.getConfig()["ParentPath"]
         self.outFileNotWellformed = open(config.getConfig()["outFileNotWellformed"],"a")
         self.outFileIdNotAvailable = open(config.getConfig()["outFileIdNotAvailable"],"a")
+        self.outFileLogs = open(config.getConfig()["outFileLogs"],"a")
         self.recordRegex = re.compile(config.getConfig()["recordRegex"], re.UNICODE | re.DOTALL | re.IGNORECASE)
         self.idRegEx = re.compile(config.getConfig()["idRegex"], re.UNICODE | re.DOTALL | re.IGNORECASE)
         self.outline = Template("idnotavailable: $id / file: $file $linebreak")
         self.outlineNWF = Template("idnotwellformed: $id / file: $file $linebreak")
+        self.outLogs = Template("message: $message $linebreak")
 
 
 
     def checkDocs(self):
         for dir in sorted(listdir(self.parentPath)):
             subobject = join(self.parentPath, dir)
-            for file in listdir(subobject):
+            for file in sorted(listdir(subobject)):
                 try:
                     if isfile(join(subobject,file)):
+
+                        self.printMessage ("reading file: " + join(subobject,file))
 
                         tfile = gzip.open(join(subobject,file),"r")
                         contentSingleFile = tfile.read()
@@ -73,6 +77,8 @@ class SolrDocWellFormedChecker:
             self.outFileIdNotAvailable.close()
         if not self.outFileNotWellformed is None:
             self.outFileNotWellformed.close()
+        if not self.outFileLogs is None:
+            self.outFileLogs.close()
 
     def printId(self,currentId, filename):
 
@@ -84,6 +90,10 @@ class SolrDocWellFormedChecker:
         self.outFileNotWellformed.write(self.outlineNWF.substitute({"id":currentId, "file": filename, "linebreak": linesep}))
         self.outFileNotWellformed.flush()
 
+    def printMessage(self,message):
+
+        self.outFileLogs.write(self.outLogs.substitute({"message":message, "linebreak": linesep}))
+        self.outFileLogs.flush()
 
 
 

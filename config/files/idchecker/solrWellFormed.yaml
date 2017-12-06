@@ -1,5 +1,6 @@
 ParentPath: /swissbib_index/solrDocumentProcessing/MarcToSolr/data/failures
 outFileNotWellformed: /home/swissbib/environment/code/swissbib.repositories/pyutils/failures.txt
 outFileIdNotAvailable: /home/swissbib/environment/code/swissbib.repositories/pyutils/idNotAvailable.txt
+outFileLogs: /home/swissbib/environment/code/swissbib.repositories/pyutils/outlogs.txt
 recordRegex: (<doc>.*?</doc>)
 idRegex: name="id">(.*?)<
