@@ -11,140 +11,45 @@ import os
 
 
 class RunQueries():
+
     def __init__(self,
-                 mongoUser = None,
-                 mongoPassword = None,
-                 minTime = None,
-                 config = None,
-                 addparams = "",
-                 addnote = "",
-                 solrHost = None):
-
-
-        cTimeUTC =  datetime.utcnow()
-        nTList = [str(cTimeUTC.date()),"T",str(cTimeUTC.hour),str(cTimeUTC.minute),str(cTimeUTC.second),"Z"]
-        self.currentTime = "".join(nTList)
+                 solrHost=None,
+                 config=None,
+                 addparams="",
+                 ):
 
         self.config = AppConfig(config)
-        self.mongoWrapper = MongoClientWrapper(self.config,
-                                               mongoUser,
-                                               mongoPassword)
-        self.addnote = addnote
+
 
         if solrHost is None:
             self.solrURL = self.config.getConfig()["SOLR"]["host"]
         else:
             self.solrURL = solrHost
 
-        if minTime is None:
-            self.minimumLiveTime = 0
-        else:
-            self.minimumLiveTime = minTime
-
-        self.timestampFile = open("solrperformance/timestamps.txt","a")
-        self.timestampMongo = "testtime_" + self.currentTime
-
-        self.timestampFile.write(self.timestampMongo + os.linesep)
-        self.timestampFile.flush()
-        self.timestampFile.close()
         self.additionalparams = addparams
 
 
         self.startTime = time.strftime('%H:%M:%S')
         self.totalQueryTime = 0
         self.totalNumberRequests = 0
+
         self.timeCollection = {}
         self.initializeCollecCurrentQueryTime()
+
+        cTimeUTC =  datetime.utcnow()
+        nTList = [str(cTimeUTC.date()),"T",str(cTimeUTC.hour),str(cTimeUTC.minute),str(cTimeUTC.second),"Z"]
+        self.currentTime = "".join(nTList)
 
 
 
     def getURL(self):
         return self.solrURL
 
-    def getMongoTimeStamp(self):
-        return self.timestampMongo
-
     def getAverTime(self):
         return self.totalQueryTime / self.totalNumberRequests
 
-    def getMinTime(self):
-        return self.minimumLiveTime
-
-
     def getStartTime(self):
         return self.startTime
-
-    def getDistribution(self):
-        distribution = []
-        for k, v in self.timeCollection.items():
-            distribution.append(" (" + k + "=>" + str(v) + ") ")
-
-        return ''.join(distribution)
-
-
-
-
-
-
-    def startRunning(self):
-
-
-
-        if self.minimumLiveTime == 0:
-            filter = {}
-        else:
-            filter = {"time": {"$gt": (int)(self.minimumLiveTime)}}
-
-        for doc in self.mongoWrapper.getQueriesCollection().find(filter):
-            try:
-                query = doc["query"]
-                if not self.additionalparams == "":
-                    query += "&" + self.additionalparams
-                docId = doc["_id"]
-                result = requests.get(self.solrURL,params=query.encode("utf-8"))
-                io = StringIO(result.text)
-                myJson = json.load(io)
-                queryTime = myJson["responseHeader"]["QTime"]
-
-                self.totalQueryTime += queryTime
-                self.totalNumberRequests += 1
-                self.collecCurrentQueryTime(queryTime)
-
-                numberHits = myJson["response"]["numFound"]
-
-                responseObject = self.mongoWrapper.getResponseObject(docId)
-
-                if responseObject is None:
-                    responseObject = {
-                        "_id": docId,
-                        "query": query,
-                        "liveSystemTime" : doc["time"],
-                        "liveHits": doc["hits"],
-                        "testtime_" + self.currentTime: (int) (queryTime),
-                        "testhits_" + self.currentTime: (int) (numberHits)
-                    }
-                    if not self.addnote == "":
-                        responseObject["note_" + self.currentTime] = self.addnote
-                    self.mongoWrapper.insertReponseObject(responseObject)
-                else:
-                    updatePart = {
-                        "testtime_" + self.currentTime: (int)(queryTime),
-                        "testhits_" + self.currentTime: (int) (numberHits)
-                    }
-                    if not self.addnote == "":
-                        updatePart["note_" + self.currentTime] = self.addnote
-
-                    #responseObject["testtime_" + self.currentTime] = (int) (queryTime)
-                    #responseObject["testhits_" + self.currentTime] = (int)(numberHits)
-                    response = self.mongoWrapper.updateResponsObject(docId,updatePart)
-
-
-                #self.mongoWrapper.getQueriesCollection().save(doc)
-                #self.mongoWrapper.getCollection().safe(doc,safe=True)
-
-
-            except Exception as ex:
-                print (ex)
 
 
     def collecCurrentQueryTime(self, queryTime):
@@ -208,7 +113,6 @@ class RunQueries():
         elif queryTime >= 20001:
             self.timeCollection['gt20000'] += 1
 
-
     def initializeCollecCurrentQueryTime(self):
 
         self.timeCollection['0_100'] = 0
@@ -241,24 +145,180 @@ class RunQueries():
         self.timeCollection['15000_20000'] = 0
         self.timeCollection['gt20000'] = 0
 
+    def getDistribution(self):
+        distribution = []
+        for k, v in self.timeCollection.items():
+            distribution.append(" (" + k + "=>" + str(v) + ") ")
+
+        return ''.join(distribution)
+
+    def executeRequest(self, query):
+
+        if not self.additionalparams == "":
+            query += "&" + self.additionalparams
+
+        result = requests.get(self.solrURL, params=query.encode("utf-8"))
+        io = StringIO(result.text)
+        result = json.load(io)
+        queryTime = result["responseHeader"]["QTime"]
+
+        self.totalQueryTime += queryTime
+        self.totalNumberRequests += 1
+        self.collecCurrentQueryTime(queryTime)
+
+        return result
 
 
-if __name__ == '__main__':
+class RunQueriesFileBased(RunQueries):
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-u', '--user', help='user for Mongo DB', type=str, default=None)
-    parser.add_argument('-p', '--password', help='password for Mongo DB', type=str, default=None)
-    parser.add_argument('-m', '--minimalTime', help='time used to process live query should be $gt then minimaltime', type=str, default=None)
-    parser.add_argument('-c', '--config', help='config file', type=str, default="config/files/solrperformance/performance.yaml")
-    parser.add_argument('-a', '--addparam', help='query parameters which should be added to the productive query stored in mongo', type=str, default="")
-    parser.add_argument('-n', '--note', help='additional note which should be written into the response to identify the character of the testcase', type=str, default="")
-    parser.add_argument('-s', '--solrhost', help='Solr Host URL', type=str, default=None)
+    def __init__(self,
+                 file,
+                 solrHost=None,
+                 config=None):
+
+        RunQueries.__init__(self,
+                            config=config,
+                            solrHost=solrHost)
+        self.fileName = file
+
+        self.fileQueriesShortResult = {}
 
 
-    parser.parse_args()
-    args = parser.parse_args()
+    def startRunning(self):
+        with open(self.fileName,"r") as fin:
+            for line in fin:
+                try:
+                    parts = line.split("####")
+                    queryNumber = parts[0]
+                    query = parts[1]
+                    jResult = self.executeRequest(query)
 
-    runner = RunQueries(args.user,
+                    numberHits = jResult["response"]["numFound"]
+                    queryTime = jResult["responseHeader"]["QTime"]
+
+                    summary = 'hits:{HITS} / queryTime:{TIME}'.format(
+                        HITS=numberHits,
+                        TIME=queryTime
+                    )
+
+                    self.fileQueriesShortResult[queryNumber] = summary
+                except Exception as ex:
+                    print (ex)
+
+
+    def getSummarySingleQueries(self):
+        distribution = []
+        distribution.append(os.linesep)
+        for k, v in self.fileQueriesShortResult.items():
+            distribution.append("(" + k + "=>" + str(v) + ")" + os.linesep )
+
+        return ''.join(distribution)
+
+
+
+
+class RunQueriesMongo(RunQueries):
+    def __init__(self,
+                 mongoUser = None,
+                 mongoPassword = None,
+                 minTime = None,
+                 config = None,
+                 addparams = "",
+                 addnote = "",
+                 solrHost = None):
+
+        RunQueries.__init__(self,
+                            solrHost,
+                            config,
+                            addparams)
+
+
+
+        self.mongoWrapper = MongoClientWrapper(self.config,
+                                               mongoUser,
+                                               mongoPassword)
+        self.addnote = addnote
+
+
+        if minTime is None:
+            self.minimumLiveTime = 0
+        else:
+            self.minimumLiveTime = minTime
+
+        self.timestampFile = open("solrperformance/timestamps.txt","a")
+        self.timestampMongo = "testtime_" + self.currentTime
+
+        self.timestampFile.write(self.timestampMongo + os.linesep)
+        self.timestampFile.flush()
+        self.timestampFile.close()
+
+    def getMongoTimeStamp(self):
+        return self.timestampMongo
+
+    def getMinTime(self):
+        return self.minimumLiveTime
+
+
+
+
+
+    def startRunning(self):
+
+
+        if self.minimumLiveTime == 0:
+            filter = {}
+        else:
+            filter = {"time": {"$gt": (int)(self.minimumLiveTime)}}
+
+        for doc in self.mongoWrapper.getQueriesCollection().find(filter):
+            try:
+                query = doc["query"]
+
+                docId = doc["_id"]
+
+                jResult = self.executeRequest(query)
+
+                numberHits = jResult["response"]["numFound"]
+                queryTime = jResult["responseHeader"]["QTime"]
+
+                responseObject = self.mongoWrapper.getResponseObject(docId)
+
+                if responseObject is None:
+                    responseObject = {
+                        "_id": docId,
+                        "query": query,
+                        "liveSystemTime" : doc["time"],
+                        "liveHits": doc["hits"],
+                        "testtime_" + self.currentTime: (int) (queryTime),
+                        "testhits_" + self.currentTime: (int) (numberHits)
+                    }
+                    if not self.addnote == "":
+                        responseObject["note_" + self.currentTime] = self.addnote
+                    self.mongoWrapper.insertReponseObject(responseObject)
+                else:
+                    updatePart = {
+                        "testtime_" + self.currentTime: (int)(queryTime),
+                        "testhits_" + self.currentTime: (int) (numberHits)
+                    }
+                    if not self.addnote == "":
+                        updatePart["note_" + self.currentTime] = self.addnote
+
+                    #responseObject["testtime_" + self.currentTime] = (int) (queryTime)
+                    #responseObject["testhits_" + self.currentTime] = (int)(numberHits)
+                    response = self.mongoWrapper.updateResponsObject(docId,updatePart)
+
+
+                #self.mongoWrapper.getQueriesCollection().save(doc)
+                #self.mongoWrapper.getCollection().safe(doc,safe=True)
+
+
+            except Exception as ex:
+                print (ex)
+
+
+def startMongoQueries(args):
+
+    runner = RunQueriesMongo(args.user,
                         args.password,
                         args.minimalTime,
                         args.config,
@@ -271,11 +331,8 @@ if __name__ == '__main__':
     except Exception as ex:
         print (ex)
 
-    endtime = time.strftime('%H:%M:%S')
     summaryFile = open("solrperformance/summary.txt","a")
-
     stopTime = time.strftime('%H:%M:%S')
-
     summary = 'summary: startTime:{STARTTIME}   stopTime:{STOPTIME} solrurl:{URL}   timestamp:{TIMESTAMP}   averageTime:{AVERTIME}  mintime:{MINTIME}  distribution:{DISTRIBUTION}'.format(
         STARTTIME=runner.getStartTime(),
         STOPTIME=stopTime,
@@ -284,13 +341,61 @@ if __name__ == '__main__':
         AVERTIME=runner.getAverTime(),
         MINTIME=runner.getMinTime(),
         DISTRIBUTION=runner.getDistribution()
-
-
     )
 
     summaryFile.write(summary + os.linesep + os.linesep)
     summaryFile.flush()
     summaryFile.close()
+
+
+def startFileQueries(args):
+    runner = RunQueriesFileBased(file=args.queryFile,
+                                 solrHost=args.solrhost,
+                                 config=args.config)
+
+    try:
+        runner.startRunning()
+    except Exception as ex:
+        print (ex)
+
+    summaryFile = open("solrperformance/filesummary.txt","a")
+    stopTime = time.strftime('%H:%M:%S')
+    summary = 'summary: startTime:{STARTTIME}   stopTime:{STOPTIME} solrurl:{URL}   averageTime:{AVERTIME}  distribution:{DISTRIBUTION} {SUMMARYSINGLEQUERIES}'.format(
+        STARTTIME=runner.getStartTime(),
+        STOPTIME=stopTime,
+        URL=runner.getURL(),
+        AVERTIME=runner.getAverTime(),
+        DISTRIBUTION=runner.getDistribution(),
+        SUMMARYSINGLEQUERIES=runner.getSummarySingleQueries()
+    )
+
+    summaryFile.write(summary + os.linesep + os.linesep)
+    summaryFile.flush()
+    summaryFile.close()
+
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-u', '--user', help='user for Mongo DB', type=str, default=None)
+    parser.add_argument('-p', '--password', help='password for Mongo DB', type=str, default=None)
+    parser.add_argument('-m', '--minimalTime', help='time used to process live query should be $gt then minimaltime', type=str, default=None)
+    parser.add_argument('-c', '--config', help='config file', type=str, default="config/files/solrperformance/performance.yaml")
+    parser.add_argument('-a', '--addparam', help='query parameters which should be added to the productive query stored in mongo', type=str, default="")
+    parser.add_argument('-n', '--note', help='additional note which should be written into the response to identify the character of the testcase', type=str, default="")
+    parser.add_argument('-s', '--solrhost', help='Solr Host URL', type=str, default=None)
+    parser.add_argument('-f', '--queryFile', help='fileWithPreparedQueries', type=str, default=None)
+
+
+    parser.parse_args()
+    args = parser.parse_args()
+
+
+    if args.queryFile is None:
+        startMongoQueries(args)
+    else:
+        startFileQueries(args)
 
 
 
